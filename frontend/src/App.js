@@ -538,25 +538,59 @@ const App = () => {
       </div>
 
       {/* Recent Appointments */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">المواعيد الأخيرة</h3>
-        <div className="space-y-4">
-          {lawyerDashboardData.appointments.slice(0, 3).map(appointment => (
-            <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">موعد - {appointment.date}</p>
-                <p className="text-sm text-gray-600">{appointment.time} - {appointment.consultation_type}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">المواعيد الأخيرة</h3>
+          <div className="space-y-4">
+            {lawyerDashboardData.appointments.slice(0, 3).map(appointment => (
+              <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">موعد - {appointment.date}</p>
+                  <p className="text-sm text-gray-600">{appointment.time} - {appointment.consultation_type}</p>
+                  {appointment.notes && (
+                    <p className="text-xs text-gray-500 mt-1">ملاحظات: {appointment.notes}</p>
+                  )}
+                </div>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {appointment.status === 'pending' ? 'في الانتظار' : 
+                   appointment.status === 'confirmed' ? 'مؤكد' : 'ملغى'}
+                </span>
               </div>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                'bg-red-100 text-red-800'
-              }`}>
-                {appointment.status === 'pending' ? 'في الانتظار' : 
-                 appointment.status === 'confirmed' ? 'مؤكد' : 'ملغى'}
-              </span>
-            </div>
-          ))}
+            ))}
+            {lawyerDashboardData.appointments.length === 0 && (
+              <p className="text-gray-500 text-center py-4">لا توجد مواعيد حالياً</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">الاستشارات النشطة</h3>
+          <div className="space-y-4">
+            {lawyerDashboardData.consultations.filter(c => c.status === 'active').slice(0, 3).map(consultation => (
+              <div key={consultation.id} className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">استشارة {consultation.consultation_type}</p>
+                  <p className="text-sm text-gray-600">بدأت: {new Date(consultation.started_at).toLocaleString('ar-SA')}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setCurrentConsultation(consultation);
+                    setCurrentPage('consultation');
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                >
+                  انضمام
+                </button>
+              </div>
+            ))}
+            {lawyerDashboardData.consultations.filter(c => c.status === 'active').length === 0 && (
+              <p className="text-gray-500 text-center py-4">لا توجد استشارات نشطة</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
