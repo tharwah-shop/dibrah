@@ -140,6 +140,13 @@ const App = () => {
   // نظام الإشعارات
   const [notification, setNotification] = useState(null);
 
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type, id: Date.now() });
+    setTimeout(() => {
+      setNotification(null);
+    }, 3000);
+  };
+
   // إنشاء جلسة دفع
   const createPaymentSession = async (appointmentId, paymentData) => {
     try {
