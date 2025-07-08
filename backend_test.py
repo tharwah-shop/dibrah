@@ -198,6 +198,105 @@ class DebraLegalAPITester(unittest.TestCase):
         self.assertIn("total_appointments", stats)
         print(f"✅ Got platform stats: {stats}")
 
+    def test_13_lawyer_login(self):
+        """Test lawyer login"""
+        if not self.lawyer_id:
+            self.test_02_get_lawyers()
+        
+        print(f"\n🔍 Testing lawyer login endpoint for ID: {self.lawyer_id}...")
+        response = requests.post(f"{self.base_url}/api/lawyers/{self.lawyer_id}/login")
+        self.assertEqual(response.status_code, 200)
+        login_data = response.json()
+        self.assertIn("token", login_data)
+        self.assertIn("lawyer", login_data)
+        self.assertEqual(login_data["lawyer"]["id"], self.lawyer_id)
+        print(f"✅ Lawyer login successful with token: {login_data['token']}")
+        return login_data["token"]
+
+    def test_14_get_lawyer_appointments(self):
+        """Test getting lawyer appointments"""
+        if not self.lawyer_id:
+            self.test_02_get_lawyers()
+        
+        print(f"\n🔍 Testing get lawyer appointments endpoint for ID: {self.lawyer_id}...")
+        response = requests.get(f"{self.base_url}/api/lawyers/{self.lawyer_id}/appointments")
+        self.assertEqual(response.status_code, 200)
+        appointments = response.json()
+        self.assertIsInstance(appointments, list)
+        print(f"✅ Got {len(appointments)} appointments for lawyer")
+
+    def test_15_get_lawyer_consultations(self):
+        """Test getting lawyer consultations"""
+        if not self.lawyer_id:
+            self.test_02_get_lawyers()
+        
+        print(f"\n🔍 Testing get lawyer consultations endpoint for ID: {self.lawyer_id}...")
+        response = requests.get(f"{self.base_url}/api/lawyers/{self.lawyer_id}/consultations")
+        self.assertEqual(response.status_code, 200)
+        consultations = response.json()
+        self.assertIsInstance(consultations, list)
+        print(f"✅ Got {len(consultations)} consultations for lawyer")
+
+    def test_16_get_lawyer_stats(self):
+        """Test getting lawyer statistics"""
+        if not self.lawyer_id:
+            self.test_02_get_lawyers()
+        
+        print(f"\n🔍 Testing get lawyer stats endpoint for ID: {self.lawyer_id}...")
+        response = requests.get(f"{self.base_url}/api/lawyers/{self.lawyer_id}/stats")
+        self.assertEqual(response.status_code, 200)
+        stats = response.json()
+        self.assertIn("totalAppointments", stats)
+        self.assertIn("activeConsultations", stats)
+        self.assertIn("completedConsultations", stats)
+        self.assertIn("totalEarnings", stats)
+        print(f"✅ Got lawyer stats: {stats}")
+
+    def test_17_update_lawyer_profile(self):
+        """Test updating lawyer profile"""
+        if not self.lawyer_id:
+            self.test_02_get_lawyers()
+        
+        print(f"\n🔍 Testing update lawyer profile endpoint for ID: {self.lawyer_id}...")
+        profile_data = {
+            "name": "المحامي أحمد محمد (تم التحديث)",
+            "specialization": "القانون التجاري والشركات",
+            "description": "محامٍ متخصص في القانون التجاري والشركات مع خبرة 15 عام - تم تحديث الملف",
+            "price": 350,
+            "experience_years": 16,
+            "languages": ["العربية", "الإنجليزية", "الفرنسية"],
+            "certificates": ["بكالوريوس الحقوق", "ماجستير القانون التجاري", "دبلوم عالي في التحكيم"]
+        }
+        
+        response = requests.put(
+            f"{self.base_url}/api/lawyers/{self.lawyer_id}",
+            json=profile_data
+        )
+        self.assertEqual(response.status_code, 200)
+        updated_lawyer = response.json()
+        self.assertEqual(updated_lawyer["name"], profile_data["name"])
+        self.assertEqual(updated_lawyer["price"], profile_data["price"])
+        print(f"✅ Updated lawyer profile successfully")
+
+    def test_18_update_appointment_status(self):
+        """Test updating appointment status"""
+        if not self.appointment_id:
+            self.test_06_create_appointment()
+        
+        print(f"\n🔍 Testing update appointment status endpoint for ID: {self.appointment_id}...")
+        status_data = {
+            "status": "confirmed"
+        }
+        
+        response = requests.put(
+            f"{self.base_url}/api/appointments/{self.appointment_id}/status",
+            json=status_data
+        )
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertIn("message", result)
+        print(f"✅ Updated appointment status to confirmed")
+
 def run_tests():
     # Create a test suite
     suite = unittest.TestSuite()
@@ -215,7 +314,13 @@ def run_tests():
         'test_09_get_consultation',
         'test_10_add_message_to_consultation',
         'test_11_update_consultation_status',
-        'test_12_get_platform_stats'
+        'test_12_get_platform_stats',
+        'test_13_lawyer_login',
+        'test_14_get_lawyer_appointments',
+        'test_15_get_lawyer_consultations',
+        'test_16_get_lawyer_stats',
+        'test_17_update_lawyer_profile',
+        'test_18_update_appointment_status'
     ]
     
     for test_case in test_cases:
