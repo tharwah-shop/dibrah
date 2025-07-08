@@ -199,6 +199,34 @@ async def startup_event():
         if lawyers_collection.count_documents({}) == 0:
             lawyers_collection.insert_many(sample_lawyers)
             logger.info("تم إدراج البيانات التجريبية للمحامين")
+        
+        # إنشاء مستخدم مدير افتراضي
+        admin_exists = users_collection.find_one({"role": "admin"})
+        if not admin_exists:
+            admin_id = str(uuid.uuid4())
+            admin_password = auth_service.hash_password("admin123456")
+            
+            admin_user = {
+                "id": admin_id,
+                "name": "مدير النظام",
+                "email": "admin@debra-legal.com",
+                "phone": "501234567",
+                "role": "admin",
+                "status": "active",
+                "avatar": None,
+                "created_at": datetime.now(),
+                "updated_at": datetime.now(),
+                "last_login": None,
+                "email_verified": True,
+                "phone_verified": True,
+                "password_hash": admin_password,
+                "permissions": ["all"],
+                "department": "إدارة النظام"
+            }
+            
+            users_collection.insert_one(admin_user)
+            logger.info("تم إنشاء مستخدم مدير افتراضي - admin@debra-legal.com / admin123456")
+            
     except Exception as e:
         logger.error(f"خطأ في إدراج البيانات التجريبية: {e}")
 
