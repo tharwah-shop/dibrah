@@ -1174,7 +1174,7 @@ const App = () => {
     });
 
     const [showPayment, setShowPayment] = useState(false);
-    const [appointmentId, setAppointmentId] = useState(null);
+    const [currentAppointment, setCurrentAppointment] = useState(null);
 
     const handleSubmit = async (e) => {
       e.preventDefault();
