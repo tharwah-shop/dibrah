@@ -1175,9 +1175,6 @@ const App = () => {
       mobile: ''
     });
 
-    const [showPayment, setShowPayment] = useState(false);
-    const [currentAppointment, setCurrentAppointment] = useState(null);
-
     const handleSubmit = async (e) => {
       e.preventDefault();
       if (selectedLawyer) {
