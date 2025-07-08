@@ -55,7 +55,11 @@ try:
     appointments_collection = db['appointments']
     consultations_collection = db['consultations']
     users_collection = db['users']
-    payments_collection = db['payments']  # مجموعة جديدة للدفعات
+    payments_collection = db['payments']
+    sessions_collection = db['sessions']  # جلسات المستخدمين
+    notifications_collection = db['notifications']  # الإشعارات
+    reviews_collection = db['reviews']  # التقييمات
+    admin_logs_collection = db['admin_logs']  # سجلات الإدارة
     
     logger.info("تم الاتصال بقاعدة البيانات بنجاح")
 except Exception as e:
