@@ -1729,7 +1729,17 @@ const App = () => {
       </div>
     </div>
   );
+  // عرض الصفحة المحددة
   const renderPage = () => {
+    // التحقق من URL للصفحات الخاصة بالدفع
+    const urlParams = new URLSearchParams(window.location.search);
+    if (window.location.pathname === '/payment/success' || urlParams.get('paymentId')) {
+      return <PaymentSuccessPage />;
+    }
+    if (window.location.pathname === '/payment/error') {
+      return <PaymentErrorPage />;
+    }
+
     if (isLawyerMode) {
       switch (currentPage) {
         case 'lawyerDashboard':
