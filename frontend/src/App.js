@@ -1226,6 +1226,24 @@ const App = () => {
 
   return (
     <div className="font-arabic">
+      {/* نظام الإشعارات */}
+      {notification && (
+        <div className={`fixed top-4 left-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+          notification.type === 'success' ? 'bg-green-500 text-white' :
+          notification.type === 'error' ? 'bg-red-500 text-white' :
+          'bg-blue-500 text-white'
+        }`}>
+          <div className="flex items-center justify-between">
+            <p className="font-medium">{notification.message}</p>
+            <button 
+              onClick={() => setNotification(null)}
+              className="mr-2 text-white hover:text-gray-200"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
       {renderPage()}
     </div>
   );
