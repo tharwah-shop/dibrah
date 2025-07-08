@@ -10,6 +10,9 @@ from bson import ObjectId
 import logging
 
 # استيراد خدمات الدفع
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from payment_service import myfatoorah_service
 from payment_models import (
     PaymentRequest, PaymentResponse, PaymentVerification, 
