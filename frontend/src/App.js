@@ -221,7 +221,7 @@ const App = () => {
               <img src="https://images.unsplash.com/photo-1589994965851-a8f479c573a9" alt="Logo" className="h-12 w-12 rounded-full ml-3" />
               <h1 className="text-2xl font-bold text-gray-900">دبرة للاستشارات والمحاماة</h1>
             </div>
-            <nav className="flex space-x-reverse space-x-8">
+            <nav className="hidden md:flex space-x-reverse space-x-8">
               <button 
                 onClick={() => setCurrentPage('home')}
                 className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
@@ -247,6 +247,16 @@ const App = () => {
                 دخول المحامين
               </button>
             </nav>
+            
+            {/* القائمة المحمولة */}
+            <div className="md:hidden">
+              <button 
+                onClick={() => setCurrentPage('lawyerLogin')}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium transition-colors text-sm"
+              >
+                دخول المحامين
+              </button>
+            </div>
           </div>
         </div>
       </header>
