@@ -609,6 +609,255 @@ async def health_check():
             "timestamp": datetime.now()
         }
 
+# ========================
+# نقاط النهاية للدفع
+# ========================
+
+@app.post("/api/payments/create", response_model=PaymentResponse)
+async def create_payment(payment_request: PaymentRequest):
+    """إنشاء جلسة دفع جديدة"""
+    try:
+        # التحقق من وجود الموعد
+        appointment = appointments_collection.find_one({"id": payment_request.appointment_id})
+        if not appointment:
+            raise HTTPException(status_code=404, detail="الموعد غير موجود")
+        
+        # التحقق من عدم وجود دفع مؤكد مسبقاً
+        existing_payment = payments_collection.find_one({
+            "appointment_id": payment_request.appointment_id,
+            "status": "paid"
+        })
+        if existing_payment:
+            raise HTTPException(status_code=400, detail="تم دفع هذا الموعد مسبقاً")
+        
+        # إنشاء جلسة الدفع
+        payment_result = await myfatoorah_service.create_payment_session(
+            amount=payment_request.amount,
+            customer_name=payment_request.customer_name,
+            customer_email=payment_request.customer_email,
+            customer_mobile=payment_request.customer_mobile,
+            appointment_id=payment_request.appointment_id,
+            lawyer_name=payment_request.lawyer_name,
+            consultation_type=payment_request.consultation_type
+        )
+        
+        if payment_result["success"]:
+            # حفظ سجل الدفع
+            payment_record = PaymentRecord(
+                id=str(uuid.uuid4()),
+                appointment_id=payment_request.appointment_id,
+                invoice_id=payment_result["invoice_id"],
+                amount=payment_request.amount,
+                customer_name=payment_request.customer_name,
+                customer_email=payment_request.customer_email,
+                customer_mobile=payment_request.customer_mobile,
+                lawyer_name=payment_request.lawyer_name,
+                consultation_type=payment_request.consultation_type,
+                payment_url=payment_result["payment_url"],
+                status="pending"
+            )
+            
+            payments_collection.insert_one(payment_record.dict())
+            
+            # تحديث حالة الموعد
+            appointments_collection.update_one(
+                {"id": payment_request.appointment_id},
+                {"$set": {
+                    "payment_status": "pending",
+                    "invoice_id": payment_result["invoice_id"],
+                    "payment_amount": payment_request.amount
+                }}
+            )
+            
+            return PaymentResponse(**payment_result)
+        else:
+            raise HTTPException(status_code=400, detail=payment_result["error"])
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"خطأ في إنشاء الدفع: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في إنشاء جلسة الدفع")
+
+@app.post("/api/payments/verify", response_model=PaymentStatus)
+async def verify_payment(verification: PaymentVerification):
+    """التحقق من حالة الدفع"""
+    try:
+        # التحقق من الدفع عبر ماي فاتورة
+        verification_result = await myfatoorah_service.verify_payment(verification.payment_id)
+        
+        if verification_result["success"] and verification_result["is_paid"]:
+            # البحث عن سجل الدفع
+            payment_record = payments_collection.find_one({
+                "invoice_id": verification_result["invoice_id"]
+            })
+            
+            if payment_record:
+                # تحديث حالة الدفع
+                payments_collection.update_one(
+                    {"id": payment_record["id"]},
+                    {"$set": {
+                        "status": "paid",
+                        "payment_id": verification.payment_id,
+                        "payment_method": verification_result["payment_method"],
+                        "transaction_date": datetime.now(),
+                        "updated_at": datetime.now()
+                    }}
+                )
+                
+                # تحديث حالة الموعد
+                appointments_collection.update_one(
+                    {"id": payment_record["appointment_id"]},
+                    {"$set": {
+                        "payment_status": "paid",
+                        "status": "confirmed"
+                    }}
+                )
+                
+                logger.info(f"Payment confirmed for appointment {payment_record['appointment_id']}")
+        
+        return PaymentStatus(**verification_result)
+        
+    except Exception as e:
+        logger.error(f"خطأ في التحقق من الدفع: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في التحقق من حالة الدفع")
+
+@app.post("/api/payments/refund", response_model=RefundResponse)
+async def refund_payment(refund_request: RefundRequest):
+    """استرداد المبلغ"""
+    try:
+        # البحث عن سجل الدفع
+        payment_record = payments_collection.find_one({"payment_id": refund_request.payment_id})
+        if not payment_record:
+            raise HTTPException(status_code=404, detail="سجل الدفع غير موجود")
+        
+        if payment_record["status"] != "paid":
+            raise HTTPException(status_code=400, detail="لا يمكن استرداد دفع غير مؤكد")
+        
+        # طلب الاسترداد
+        refund_result = await myfatoorah_service.refund_payment(
+            payment_id=refund_request.payment_id,
+            amount=refund_request.amount,
+            reason=refund_request.reason
+        )
+        
+        if refund_result["success"]:
+            # تحديث سجل الدفع
+            payments_collection.update_one(
+                {"payment_id": refund_request.payment_id},
+                {"$set": {
+                    "status": "refunded",
+                    "refund_amount": refund_request.amount,
+                    "refund_reason": refund_request.reason,
+                    "updated_at": datetime.now()
+                }}
+            )
+            
+            # تحديث حالة الموعد
+            appointments_collection.update_one(
+                {"id": payment_record["appointment_id"]},
+                {"$set": {
+                    "payment_status": "refunded",
+                    "status": "cancelled"
+                }}
+            )
+        
+        return RefundResponse(**refund_result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"خطأ في الاسترداد: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في عملية الاسترداد")
+
+@app.get("/api/payments/history/{appointment_id}")
+async def get_payment_history(appointment_id: str):
+    """جلب تاريخ الدفعات للموعد"""
+    try:
+        payments = list(payments_collection.find(
+            {"appointment_id": appointment_id},
+            {"_id": 0}
+        ).sort("created_at", -1))
+        
+        return {
+            "appointment_id": appointment_id,
+            "payments": payments,
+            "count": len(payments)
+        }
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب تاريخ الدفعات: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في جلب تاريخ الدفعات")
+
+@app.post("/api/payments/webhook/myfatoorah")
+async def myfatoorah_webhook(webhook_data: WebhookPayload):
+    """معالجة Webhook من ماي فاتورة"""
+    try:
+        logger.info(f"Received MyFatoorah webhook: {webhook_data}")
+        
+        # البحث عن سجل الدفع
+        payment_record = payments_collection.find_one({
+            "invoice_id": webhook_data.InvoiceId
+        })
+        
+        if not payment_record:
+            logger.warning(f"Payment record not found for invoice {webhook_data.InvoiceId}")
+            return {"status": "ignored", "reason": "payment record not found"}
+        
+        # تحديث حالة الدفع حسب الحالة الواردة
+        new_status = "pending"
+        appointment_status = "pending"
+        
+        if webhook_data.InvoiceStatus == "Paid":
+            new_status = "paid"
+            appointment_status = "confirmed"
+        elif webhook_data.InvoiceStatus == "Failed":
+            new_status = "failed"
+            appointment_status = "payment_failed"
+        elif webhook_data.InvoiceStatus == "Expired":
+            new_status = "expired"
+            appointment_status = "payment_expired"
+        
+        # تحديث سجل الدفع
+        payments_collection.update_one(
+            {"invoice_id": webhook_data.InvoiceId},
+            {"$set": {
+                "status": new_status,
+                "payment_id": webhook_data.PaymentId,
+                "payment_method": webhook_data.PaymentGateway,
+                "transaction_date": datetime.now(),
+                "updated_at": datetime.now()
+            }}
+        )
+        
+        # تحديث حالة الموعد
+        appointments_collection.update_one(
+            {"id": payment_record["appointment_id"]},
+            {"$set": {
+                "payment_status": new_status,
+                "status": appointment_status
+            }}
+        )
+        
+        logger.info(f"Webhook processed successfully for appointment {payment_record['appointment_id']}")
+        
+        return {"status": "processed", "appointment_id": payment_record["appointment_id"]}
+        
+    except Exception as e:
+        logger.error(f"خطأ في معالجة Webhook: {e}")
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/payments/settings")
+async def get_payment_settings():
+    """إعدادات نظام الدفع"""
+    return {
+        "min_amount": float(os.getenv("MIN_PAYMENT_AMOUNT", "50")),
+        "max_amount": float(os.getenv("MAX_PAYMENT_AMOUNT", "50000")),
+        "currency": "SAR",
+        "supported_gateways": ["myfatoorah"],
+        "test_mode": True  # البيئة التجريبية
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
