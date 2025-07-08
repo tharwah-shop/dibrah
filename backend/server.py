@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -18,6 +18,15 @@ from payment_models import (
     PaymentRequest, PaymentResponse, PaymentVerification, 
     PaymentStatus, RefundRequest, RefundResponse, 
     PaymentRecord, WebhookPayload
+)
+
+# استيراد نظام المصادقة
+from auth_service import auth_service, get_current_user, require_role, UserRoles
+from user_models import (
+    UserRegister, UserLogin, PasswordReset, PasswordUpdate,
+    User, Client, Lawyer, Admin, TokenResponse, UserResponse,
+    ProfileUpdate, UserStats, LawyerStats, ClientStats,
+    UserRole, UserStatus
 )
 
 # إعداد السجلات
