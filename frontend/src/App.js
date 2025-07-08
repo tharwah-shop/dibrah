@@ -168,9 +168,15 @@ const App = () => {
           ...appointmentData
         })
       });
-      const data = await response.json();
-      setAppointments(prev => [...prev, data]);
-      alert('تم حجز الموعد بنجاح!');
+      if (response.ok) {
+        const data = await response.json();
+        setAppointments(prev => [...prev, data]);
+        showNotification('تم حجز الموعد بنجاح!', 'success');
+        return true;
+      } else {
+        showNotification('حدث خطأ في حجز الموعد', 'error');
+        return false;
+      }
     } catch (error) {
       console.error('Error booking appointment:', error);
     }
