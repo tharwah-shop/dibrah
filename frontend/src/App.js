@@ -1178,7 +1178,7 @@ const App = () => {
       if (selectedLawyer) {
         const success = await bookAppointment(selectedLawyer.id, appointmentData);
         if (success) {
-          // عرض نموذج الدفع
+          // عرض نموذج الدفع بدلاً من الانتقال مباشرة
           setShowPayment(true);
         }
       }
