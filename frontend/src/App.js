@@ -1229,8 +1229,12 @@ const App = () => {
                 onClick={() => {
                   if (showPayment) {
                     setShowPayment(false);
+                    // الاحتفاظ ببيانات النموذج عند العودة
                   } else {
                     setCurrentPage('lawyers');
+                    // إعادة تعيين البيانات عند الخروج
+                    setCurrentAppointment(null);
+                    setShowPayment(false);
                   }
                 }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
