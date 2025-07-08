@@ -24,7 +24,18 @@ const App = () => {
   // جلب بيانات المحامين
   useEffect(() => {
     fetchLawyers();
+    fetchPaymentSettings();
   }, []);
+
+  const fetchPaymentSettings = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payments/settings`);
+      const data = await response.json();
+      setPaymentSettings(data);
+    } catch (error) {
+      console.error('Error fetching payment settings:', error);
+    }
+  };
 
   const fetchLawyers = async () => {
     try {
