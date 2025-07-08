@@ -909,11 +909,23 @@ const App = () => {
       notes: ''
     });
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
       e.preventDefault();
       if (selectedLawyer) {
-        bookAppointment(selectedLawyer.id, appointmentData);
-        setCurrentPage('appointments');
+        const success = await bookAppointment(selectedLawyer.id, appointmentData);
+        if (success) {
+          // إعادة تعيين النموذج
+          setAppointmentData({
+            date: '',
+            time: '',
+            consultation_type: 'video',
+            notes: ''
+          });
+          // الانتقال لصفحة المواعيد بعد ثانيتين
+          setTimeout(() => {
+            setCurrentPage('appointments');
+          }, 2000);
+        }
       }
     };
 
