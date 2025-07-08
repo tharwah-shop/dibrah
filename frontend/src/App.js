@@ -20,6 +20,8 @@ const App = () => {
     max_amount: 50000,
     currency: 'SAR'
   });
+  const [showPayment, setShowPayment] = useState(false);
+  const [currentAppointment, setCurrentAppointment] = useState(null);
 
   // جلب بيانات المحامين
   useEffect(() => {
