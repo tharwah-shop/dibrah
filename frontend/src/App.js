@@ -1197,6 +1197,13 @@ const App = () => {
         return;
       }
 
+      // الحصول على ID الموعد الأخير المحجوز
+      const lastAppointment = appointments[appointments.length - 1];
+      if (!lastAppointment) {
+        showNotification('لم يتم العثور على الموعد', 'error');
+        return;
+      }
+
       const paymentData = {
         amount: selectedLawyer.price,
         customer_name: customerData.name,
@@ -1206,7 +1213,7 @@ const App = () => {
         lawyer_name: selectedLawyer.name
       };
 
-      await createPaymentSession(appointments[appointments.length - 1]?.id, paymentData);
+      await createPaymentSession(lastAppointment.id, paymentData);
     };
 
     return (
