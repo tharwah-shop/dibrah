@@ -1179,9 +1179,10 @@ const App = () => {
     const handleSubmit = async (e) => {
       e.preventDefault();
       if (selectedLawyer) {
-        const success = await bookAppointment(selectedLawyer.id, appointmentData);
-        if (success) {
-          // عرض نموذج الدفع بدلاً من الانتقال مباشرة
+        const appointmentResult = await bookAppointment(selectedLawyer.id, appointmentData);
+        if (appointmentResult) {
+          // حفظ بيانات الموعد وعرض نموذج الدفع
+          setCurrentAppointment(appointmentResult);
           setShowPayment(true);
         }
       }
