@@ -1383,6 +1383,7 @@ const App = () => {
                     <div className="text-sm text-yellow-700">
                       <p className="font-medium">طريقة الدفع الآمنة</p>
                       <p>سيتم تحويلك لبوابة الدفع الآمنة (ماي فاتورة) لإكمال عملية الدفع بأمان تام.</p>
+                      <p className="mt-1 font-medium">⏰ يرجى إكمال الدفع خلال 30 دقيقة لتأكيد الحجز</p>
                     </div>
                   </div>
                 </div>
