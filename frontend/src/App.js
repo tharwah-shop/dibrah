@@ -1155,7 +1155,7 @@ const App = () => {
     );
   };
 
-  // صفحة الحجز
+  // صفحة الحجز المحدثة مع الدفع
   const BookingPage = () => {
     const [appointmentData, setAppointmentData] = useState({
       date: '',
@@ -1164,24 +1164,49 @@ const App = () => {
       notes: ''
     });
 
+    const [customerData, setCustomerData] = useState({
+      name: '',
+      email: '',
+      mobile: ''
+    });
+
+    const [showPayment, setShowPayment] = useState(false);
+    const [appointmentId, setAppointmentId] = useState(null);
+
     const handleSubmit = async (e) => {
       e.preventDefault();
       if (selectedLawyer) {
         const success = await bookAppointment(selectedLawyer.id, appointmentData);
         if (success) {
-          // إعادة تعيين النموذج
-          setAppointmentData({
-            date: '',
-            time: '',
-            consultation_type: 'video',
-            notes: ''
-          });
-          // الانتقال لصفحة المواعيد بعد ثانيتين
-          setTimeout(() => {
-            setCurrentPage('appointments');
-          }, 2000);
+          // عرض نموذج الدفع
+          setShowPayment(true);
         }
       }
+    };
+
+    const handlePayment = async (e) => {
+      e.preventDefault();
+      
+      if (!customerData.name || !customerData.email || !customerData.mobile) {
+        showNotification('يرجى ملء جميع البيانات المطلوبة', 'error');
+        return;
+      }
+
+      if (!customerData.mobile.match(/^5[0-9]{8}$/)) {
+        showNotification('يرجى إدخال رقم جوال سعودي صحيح (مثال: 512345678)', 'error');
+        return;
+      }
+
+      const paymentData = {
+        amount: selectedLawyer.price,
+        customer_name: customerData.name,
+        customer_email: customerData.email,
+        customer_mobile: customerData.mobile,
+        consultation_type: appointmentData.consultation_type,
+        lawyer_name: selectedLawyer.name
+      };
+
+      await createPaymentSession(appointments[appointments.length - 1]?.id, paymentData);
     };
 
     return (
@@ -1189,12 +1214,20 @@ const App = () => {
         <header className="bg-white shadow-lg">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-6">
-              <h1 className="text-2xl font-bold text-gray-900">حجز موعد</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {showPayment ? 'الدفع' : 'حجز موعد'}
+              </h1>
               <button 
-                onClick={() => setCurrentPage('lawyers')}
+                onClick={() => {
+                  if (showPayment) {
+                    setShowPayment(false);
+                  } else {
+                    setCurrentPage('lawyers');
+                  }
+                }}
                 className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                العودة للمحامين
+                {showPayment ? 'العودة للحجز' : 'العودة للمحامين'}
               </button>
             </div>
           </div>
@@ -1213,65 +1246,150 @@ const App = () => {
                   <div>
                     <h3 className="font-semibold text-gray-900">{selectedLawyer.name}</h3>
                     <p className="text-blue-600">{selectedLawyer.specialization}</p>
+                    <p className="text-green-600 font-bold">{selectedLawyer.price} ريال/ساعة</p>
                   </div>
                 </div>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">تاريخ الموعد</label>
-                <input 
-                  type="date" 
-                  value={appointmentData.date}
-                  onChange={(e) => setAppointmentData({...appointmentData, date: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+            {!showPayment ? (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">تاريخ الموعد</label>
+                  <input 
+                    type="date" 
+                    value={appointmentData.date}
+                    onChange={(e) => setAppointmentData({...appointmentData, date: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">وقت الموعد</label>
-                <input 
-                  type="time" 
-                  value={appointmentData.time}
-                  onChange={(e) => setAppointmentData({...appointmentData, time: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">وقت الموعد</label>
+                  <input 
+                    type="time" 
+                    value={appointmentData.time}
+                    onChange={(e) => setAppointmentData({...appointmentData, time: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">نوع الاستشارة</label>
-                <select 
-                  value={appointmentData.consultation_type}
-                  onChange={(e) => setAppointmentData({...appointmentData, consultation_type: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">نوع الاستشارة</label>
+                  <select 
+                    value={appointmentData.consultation_type}
+                    onChange={(e) => setAppointmentData({...appointmentData, consultation_type: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="video">مكالمة مرئية</option>
+                    <option value="audio">مكالمة صوتية</option>
+                    <option value="chat">دردشة نصية</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ملاحظات</label>
+                  <textarea 
+                    value={appointmentData.notes}
+                    onChange={(e) => setAppointmentData({...appointmentData, notes: e.target.value})}
+                    rows="4"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="اكتب تفاصيل استشارتك هنا..."
+                  />
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
                 >
-                  <option value="video">مكالمة مرئية</option>
-                  <option value="audio">مكالمة صوتية</option>
-                  <option value="chat">دردشة نصية</option>
-                </select>
-              </div>
+                  المتابعة للدفع
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handlePayment} className="space-y-6">
+                <div className="bg-green-50 p-4 rounded-lg mb-6">
+                  <h3 className="text-lg font-semibold text-green-800 mb-2">ملخص الموعد</h3>
+                  <div className="text-sm text-green-700">
+                    <p><strong>التاريخ:</strong> {appointmentData.date}</p>
+                    <p><strong>الوقت:</strong> {appointmentData.time}</p>
+                    <p><strong>نوع الاستشارة:</strong> {appointmentData.consultation_type}</p>
+                    <p><strong>المبلغ:</strong> {selectedLawyer.price} ريال</p>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ملاحظات</label>
-                <textarea 
-                  value={appointmentData.notes}
-                  onChange={(e) => setAppointmentData({...appointmentData, notes: e.target.value})}
-                  rows="4"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="اكتب تفاصيل استشارتك هنا..."
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">الاسم الكامل</label>
+                  <input 
+                    type="text" 
+                    value={customerData.name}
+                    onChange={(e) => setCustomerData({...customerData, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="أدخل اسمك الكامل"
+                    required
+                  />
+                </div>
 
-              <button 
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
-              >
-                تأكيد الحجز
-              </button>
-            </form>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني</label>
+                  <input 
+                    type="email" 
+                    value={customerData.email}
+                    onChange={(e) => setCustomerData({...customerData, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="example@email.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">رقم الجوال (السعودية)</label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                      +966
+                    </span>
+                    <input 
+                      type="tel" 
+                      value={customerData.mobile}
+                      onChange={(e) => setCustomerData({...customerData, mobile: e.target.value})}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="512345678"
+                      pattern="5[0-9]{8}"
+                      maxLength="9"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">مثال: 512345678</p>
+                </div>
+
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-yellow-400 mt-0.5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="text-sm text-yellow-700">
+                      <p className="font-medium">طريقة الدفع الآمنة</p>
+                      <p>سيتم تحويلك لبوابة الدفع الآمنة (ماي فاتورة) لإكمال عملية الدفع بأمان تام.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center text-xs text-gray-500">
+                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <span>الدفع آمن ومشفر • المبلغ المطلوب: {paymentSettings.min_amount} - {paymentSettings.max_amount} ريال</span>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                >
+                  الدفع الآن - {selectedLawyer.price} ريال
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>
