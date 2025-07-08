@@ -158,6 +158,20 @@ class MyFatoorahService:
         """التحقق من حالة الدفع"""
         
         try:
+            # في وضع الاختبار، نعيد استجابة وهمية
+            if self.api_key == "test_api_key":
+                logger.info(f"Test mode: Verifying payment {payment_id}")
+                return {
+                    "success": True,
+                    "is_paid": True,
+                    "payment_status": "Paid",
+                    "invoice_id": f"test_invoice_{uuid.uuid4()}",
+                    "invoice_value": 300,
+                    "customer_reference": "test_reference",
+                    "payment_method": "Test Payment",
+                    "transaction_date": datetime.now().isoformat()
+                }
+            
             # طلب التحقق من الدفع
             verification_data = {
                 "Key": payment_id,
