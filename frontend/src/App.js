@@ -2,13 +2,19 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 const App = () => {
+  // حالة التطبيق الرئيسية
   const [currentPage, setCurrentPage] = useState('home');
   const [selectedLawyer, setSelectedLawyer] = useState(null);
   const [lawyers, setLawyers] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [currentConsultation, setCurrentConsultation] = useState(null);
+  
+  // نظام المصادقة
   const [user, setUser] = useState(null);
-  const [isLawyerMode, setIsLawyerMode] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authToken, setAuthToken] = useState(null);
+  
+  // البيانات والإعدادات
   const [lawyerDashboardData, setLawyerDashboardData] = useState({
     appointments: [],
     consultations: [],
