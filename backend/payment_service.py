@@ -224,6 +224,16 @@ class MyFatoorahService:
         """استرداد المبلغ"""
         
         try:
+            # في وضع الاختبار، نعيد استجابة وهمية
+            if self.api_key == "test_api_key":
+                logger.info(f"Test mode: Refunding payment {payment_id}")
+                return {
+                    "success": True,
+                    "refund_id": f"test_refund_{uuid.uuid4()}",
+                    "amount": amount,
+                    "status": "تم الاسترداد بنجاح"
+                }
+            
             refund_data = {
                 "KeyType": "PaymentId",
                 "Key": payment_id,
