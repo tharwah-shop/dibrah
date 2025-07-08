@@ -9,6 +9,14 @@ from pymongo import MongoClient
 from bson import ObjectId
 import logging
 
+# استيراد خدمات الدفع
+from payment_service import myfatoorah_service
+from payment_models import (
+    PaymentRequest, PaymentResponse, PaymentVerification, 
+    PaymentStatus, RefundRequest, RefundResponse, 
+    PaymentRecord, WebhookPayload
+)
+
 # إعداد السجلات
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
