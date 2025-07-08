@@ -15,6 +15,11 @@ const App = () => {
     stats: {},
     profile: {}
   });
+  const [paymentSettings, setPaymentSettings] = useState({
+    min_amount: 50,
+    max_amount: 50000,
+    currency: 'SAR'
+  });
 
   // جلب بيانات المحامين
   useEffect(() => {
