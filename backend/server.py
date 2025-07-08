@@ -202,6 +202,515 @@ async def startup_event():
     except Exception as e:
         logger.error(f"خطأ في إدراج البيانات التجريبية: {e}")
 
+# ========================
+# نقاط النهاية لإدارة المستخدمين (للمدراء)
+# ========================
+
+@app.get("/api/admin/users", response_model=List[User])
+async def get_all_users(
+    page: int = 1,
+    limit: int = 10,
+    role: Optional[UserRole] = None,
+    status: Optional[UserStatus] = None,
+    current_user: dict = Depends(require_role([UserRoles.ADMIN]))
+):
+    """جلب جميع المستخدمين (للمدراء فقط)"""
+    try:
+        # بناء معايير البحث
+        filter_criteria = {}
+        if role:
+            filter_criteria["role"] = role.value
+        if status:
+            filter_criteria["status"] = status.value
+        
+        # التصفح مع التقسيم
+        skip = (page - 1) * limit
+        users = list(users_collection.find(
+            filter_criteria,
+            {"_id": 0, "password_hash": 0}
+        ).skip(skip).limit(limit).sort("created_at", -1))
+        
+        return [User(**user) for user in users]
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب المستخدمين: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في جلب المستخدمين"
+        )
+
+@app.get("/api/admin/stats", response_model=UserStats)
+async def get_user_stats(current_user: dict = Depends(require_role([UserRoles.ADMIN]))):
+    """إحصائيات المستخدمين للمدراء"""
+    try:
+        total_users = users_collection.count_documents({})
+        total_clients = users_collection.count_documents({"role": UserRole.CLIENT})
+        total_lawyers = users_collection.count_documents({"role": UserRole.LAWYER})
+        total_admins = users_collection.count_documents({"role": UserRole.ADMIN})
+        active_users = users_collection.count_documents({"status": UserStatus.ACTIVE})
+        
+        # المستخدمين الجدد اليوم
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        new_users_today = users_collection.count_documents({
+            "created_at": {"$gte": today_start}
+        })
+        
+        # المستخدمين الجدد هذا الشهر
+        month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        new_users_this_month = users_collection.count_documents({
+            "created_at": {"$gte": month_start}
+        })
+        
+        return UserStats(
+            total_users=total_users,
+            total_clients=total_clients,
+            total_lawyers=total_lawyers,
+            total_admins=total_admins,
+            active_users=active_users,
+            new_users_today=new_users_today,
+            new_users_this_month=new_users_this_month
+        )
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب إحصائيات المستخدمين: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في جلب الإحصائيات"
+        )
+
+@app.put("/api/admin/users/{user_id}/status")
+async def update_user_status(
+    user_id: str,
+    new_status: UserStatus,
+    current_user: dict = Depends(require_role([UserRoles.ADMIN]))
+):
+    """تحديث حالة المستخدم"""
+    try:
+        # التحقق من وجود المستخدم
+        user_record = users_collection.find_one({"id": user_id})
+        if not user_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="المستخدم غير موجود"
+            )
+        
+        # تحديث الحالة
+        users_collection.update_one(
+            {"id": user_id},
+            {"$set": {
+                "status": new_status.value,
+                "updated_at": datetime.now()
+            }}
+        )
+        
+        # تسجيل الإجراء
+        admin_logs_collection.insert_one({
+            "admin_id": current_user["user_id"],
+            "action": "update_user_status",
+            "target_user_id": user_id,
+            "details": {"new_status": new_status.value},
+            "timestamp": datetime.now()
+        })
+        
+        return {"message": f"تم تحديث حالة المستخدم إلى {new_status.value}"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"خطأ في تحديث حالة المستخدم: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في تحديث حالة المستخدم"
+        )
+
+@app.post("/api/admin/lawyers/{lawyer_id}/verify")
+async def verify_lawyer(
+    lawyer_id: str,
+    current_user: dict = Depends(require_role([UserRoles.ADMIN]))
+):
+    """التحقق من المحامي وتفعيل حسابه"""
+    try:
+        # التحقق من وجود المحامي
+        lawyer_record = users_collection.find_one({
+            "id": lawyer_id,
+            "role": UserRole.LAWYER
+        })
+        if not lawyer_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="المحامي غير موجود"
+            )
+        
+        # تحديث حالة التحقق
+        users_collection.update_one(
+            {"id": lawyer_id},
+            {"$set": {
+                "is_verified": True,
+                "status": UserStatus.ACTIVE,
+                "updated_at": datetime.now()
+            }}
+        )
+        
+        # إضافة إلى مجموعة المحامين
+        lawyer_data = lawyer_record.copy()
+        lawyer_data.pop("_id", None)
+        lawyer_data.pop("password_hash", None)
+        lawyer_data["image"] = lawyer_data.get("avatar")
+        lawyers_collection.update_one(
+            {"id": lawyer_id},
+            {"$set": lawyer_data},
+            upsert=True
+        )
+        
+        # تسجيل الإجراء
+        admin_logs_collection.insert_one({
+            "admin_id": current_user["user_id"],
+            "action": "verify_lawyer",
+            "target_user_id": lawyer_id,
+            "timestamp": datetime.now()
+        })
+        
+        return {"message": "تم التحقق من المحامي وتفعيل حسابه"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"خطأ في التحقق من المحامي: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في التحقق من المحامي"
+        )
+
+# ========================
+# نقاط النهاية للمحامين
+# ========================
+
+@app.get("/api/lawyer/stats", response_model=LawyerStats)
+async def get_lawyer_stats(current_user: dict = Depends(require_role([UserRoles.LAWYER]))):
+    """إحصائيات المحامي"""
+    try:
+        lawyer_id = current_user["user_id"]
+        
+        # إحصائيات المواعيد
+        total_appointments = appointments_collection.count_documents({"lawyer_id": lawyer_id})
+        completed_appointments = appointments_collection.count_documents({
+            "lawyer_id": lawyer_id,
+            "status": "completed"
+        })
+        pending_appointments = appointments_collection.count_documents({
+            "lawyer_id": lawyer_id,
+            "status": {"$in": ["pending", "confirmed"]}
+        })
+        cancelled_appointments = appointments_collection.count_documents({
+            "lawyer_id": lawyer_id,
+            "status": "cancelled"
+        })
+        
+        # الأرباح
+        total_earnings = 0
+        this_month_earnings = 0
+        
+        # حساب الأرباح من الدفعات المكتملة
+        payments = list(payments_collection.find({
+            "status": "paid"
+        }))
+        
+        month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        for payment in payments:
+            appointment = appointments_collection.find_one({"id": payment["appointment_id"]})
+            if appointment and appointment.get("lawyer_id") == lawyer_id:
+                total_earnings += payment["amount"]
+                if payment.get("transaction_date", datetime.min) >= month_start:
+                    this_month_earnings += payment["amount"]
+        
+        # التقييمات
+        reviews = list(reviews_collection.find({"lawyer_id": lawyer_id}))
+        total_reviews = len(reviews)
+        average_rating = sum(review["rating"] for review in reviews) / total_reviews if reviews else 0
+        
+        return LawyerStats(
+            total_appointments=total_appointments,
+            completed_appointments=completed_appointments,
+            pending_appointments=pending_appointments,
+            cancelled_appointments=cancelled_appointments,
+            total_earnings=total_earnings,
+            this_month_earnings=this_month_earnings,
+            average_rating=round(average_rating, 1),
+            total_reviews=total_reviews
+        )
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب إحصائيات المحامي: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في جلب الإحصائيات"
+        )
+
+@app.get("/api/lawyer/dashboard")
+async def get_lawyer_dashboard(current_user: dict = Depends(require_role([UserRoles.LAWYER]))):
+    """لوحة تحكم المحامي"""
+    try:
+        lawyer_id = current_user["user_id"]
+        
+        # الحصول على الإحصائيات
+        stats_response = await get_lawyer_stats(current_user)
+        
+        # المواعيد الأخيرة
+        recent_appointments = list(appointments_collection.find(
+            {"lawyer_id": lawyer_id},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(5))
+        
+        # الاستشارات النشطة
+        active_consultations = list(consultations_collection.find(
+            {"lawyer_id": lawyer_id, "status": "active"},
+            {"_id": 0}
+        ).sort("started_at", -1))
+        
+        # التقييمات الأخيرة
+        recent_reviews = list(reviews_collection.find(
+            {"lawyer_id": lawyer_id},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(5))
+        
+        return {
+            "stats": stats_response,
+            "recent_appointments": recent_appointments,
+            "active_consultations": active_consultations,
+            "recent_reviews": recent_reviews
+        }
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب لوحة تحكم المحامي: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في جلب لوحة التحكم"
+        )
+
+# ========================
+# نقاط النهاية للعملاء
+# ========================
+
+@app.get("/api/client/stats", response_model=ClientStats)
+async def get_client_stats(current_user: dict = Depends(require_role([UserRoles.CLIENT]))):
+    """إحصائيات العميل"""
+    try:
+        client_id = current_user["user_id"]
+        
+        # إحصائيات المواعيد
+        total_appointments = appointments_collection.count_documents({"client_id": client_id})
+        completed_appointments = appointments_collection.count_documents({
+            "client_id": client_id,
+            "status": "completed"
+        })
+        pending_appointments = appointments_collection.count_documents({
+            "client_id": client_id,
+            "status": {"$in": ["pending", "confirmed"]}
+        })
+        cancelled_appointments = appointments_collection.count_documents({
+            "client_id": client_id,
+            "status": "cancelled"
+        })
+        
+        # المبلغ المدفوع
+        total_spent = 0
+        client_payments = list(payments_collection.find({
+            "status": "paid"
+        }))
+        
+        for payment in client_payments:
+            appointment = appointments_collection.find_one({"id": payment["appointment_id"]})
+            if appointment and appointment.get("client_id") == client_id:
+                total_spent += payment["amount"]
+        
+        # المحامين المفضلين (الأكثر حجزاً)
+        pipeline = [
+            {"$match": {"client_id": client_id}},
+            {"$group": {"_id": "$lawyer_id", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5}
+        ]
+        favorite_lawyers = list(appointments_collection.aggregate(pipeline))
+        favorite_lawyer_ids = [lawyer["_id"] for lawyer in favorite_lawyers]
+        
+        return ClientStats(
+            total_appointments=total_appointments,
+            completed_appointments=completed_appointments,
+            pending_appointments=pending_appointments,
+            cancelled_appointments=cancelled_appointments,
+            total_spent=total_spent,
+            favorite_lawyers=favorite_lawyer_ids
+        )
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب إحصائيات العميل: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في جلب الإحصائيات"
+        )
+
+@app.get("/api/client/dashboard")
+async def get_client_dashboard(current_user: dict = Depends(require_role([UserRoles.CLIENT]))):
+    """لوحة تحكم العميل"""
+    try:
+        client_id = current_user["user_id"]
+        
+        # الحصول على الإحصائيات
+        stats_response = await get_client_stats(current_user)
+        
+        # المواعيد القادمة
+        upcoming_appointments = list(appointments_collection.find(
+            {
+                "client_id": client_id,
+                "status": {"$in": ["confirmed", "pending"]},
+                "date": {"$gte": datetime.now().strftime("%Y-%m-%d")}
+            },
+            {"_id": 0}
+        ).sort("date", 1).limit(5))
+        
+        # المواعيد الأخيرة
+        recent_appointments = list(appointments_collection.find(
+            {"client_id": client_id},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(5))
+        
+        # المحامين المفضلين بالتفاصيل
+        favorite_lawyer_details = []
+        for lawyer_id in stats_response.favorite_lawyers:
+            lawyer = lawyers_collection.find_one({"id": lawyer_id}, {"_id": 0})
+            if lawyer:
+                favorite_lawyer_details.append(lawyer)
+        
+        return {
+            "stats": stats_response,
+            "upcoming_appointments": upcoming_appointments,
+            "recent_appointments": recent_appointments,
+            "favorite_lawyers": favorite_lawyer_details
+        }
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب لوحة تحكم العميل: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في جلب لوحة التحكم"
+        )
+
+# ========================
+# نقاط النهاية للتقييمات
+# ========================
+
+@app.post("/api/reviews")
+async def create_review(
+    appointment_id: str,
+    comment: str,
+    rating: int = 5,
+    current_user: dict = Depends(require_role([UserRoles.CLIENT]))
+):
+    """إضافة تقييم للمحامي"""
+    try:
+        # التحقق من الموعد
+        appointment = appointments_collection.find_one({
+            "id": appointment_id,
+            "client_id": current_user["user_id"],
+            "status": "completed"
+        })
+        if not appointment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="الموعد غير موجود أو غير مكتمل"
+            )
+        
+        # التحقق من عدم وجود تقييم مسبق
+        existing_review = reviews_collection.find_one({
+            "appointment_id": appointment_id,
+            "client_id": current_user["user_id"]
+        })
+        if existing_review:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="تم تقييم هذا الموعد مسبقاً"
+            )
+        
+        # التحقق من صحة التقييم
+        if not 1 <= rating <= 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="التقييم يجب أن يكون بين 1 و 5"
+            )
+        
+        # إنشاء التقييم
+        review = {
+            "id": str(uuid.uuid4()),
+            "appointment_id": appointment_id,
+            "lawyer_id": appointment["lawyer_id"],
+            "client_id": current_user["user_id"],
+            "rating": rating,
+            "comment": comment,
+            "created_at": datetime.now()
+        }
+        
+        reviews_collection.insert_one(review)
+        
+        # تحديث تقييم المحامي
+        lawyer_reviews = list(reviews_collection.find({"lawyer_id": appointment["lawyer_id"]}))
+        new_rating = sum(r["rating"] for r in lawyer_reviews) / len(lawyer_reviews)
+        
+        # تحديث في مجموعتي المحامين والمستخدمين
+        update_data = {
+            "rating": round(new_rating, 1),
+            "reviews_count": len(lawyer_reviews)
+        }
+        
+        lawyers_collection.update_one({"id": appointment["lawyer_id"]}, {"$set": update_data})
+        users_collection.update_one({"id": appointment["lawyer_id"]}, {"$set": update_data})
+        
+        return {"message": "تم إضافة التقييم بنجاح"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"خطأ في إضافة التقييم: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في إضافة التقييم"
+        )
+
+@app.get("/api/reviews/lawyer/{lawyer_id}")
+async def get_lawyer_reviews(lawyer_id: str, page: int = 1, limit: int = 10):
+    """جلب تقييمات المحامي"""
+    try:
+        skip = (page - 1) * limit
+        reviews = list(reviews_collection.find(
+            {"lawyer_id": lawyer_id},
+            {"_id": 0}
+        ).skip(skip).limit(limit).sort("created_at", -1))
+        
+        # إضافة تفاصيل العميل لكل تقييم
+        for review in reviews:
+            client = users_collection.find_one(
+                {"id": review["client_id"]},
+                {"name": 1, "avatar": 1, "_id": 0}
+            )
+            review["client_name"] = client.get("name", "عميل") if client else "عميل"
+            review["client_avatar"] = client.get("avatar") if client else None
+        
+        total_reviews = reviews_collection.count_documents({"lawyer_id": lawyer_id})
+        
+        return {
+            "reviews": reviews,
+            "total": total_reviews,
+            "page": page,
+            "limit": limit
+        }
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب التقييمات: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطأ في جلب التقييمات"
+        )
+
 # نقاط النهاية الرئيسية
 @app.get("/")
 async def read_root():
