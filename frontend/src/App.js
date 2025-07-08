@@ -239,17 +239,20 @@ const App = () => {
           ...appointmentData
         })
       });
+      
       if (response.ok) {
         const data = await response.json();
         setAppointments(prev => [...prev, data]);
         showNotification('تم حجز الموعد بنجاح!', 'success');
-        return true;
+        return data; // إرجاع بيانات الموعد مع ID
       } else {
         showNotification('حدث خطأ في حجز الموعد', 'error');
         return false;
       }
     } catch (error) {
       console.error('Error booking appointment:', error);
+      showNotification('حدث خطأ في حجز الموعد', 'error');
+      return false;
     }
   };
 
