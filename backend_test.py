@@ -297,6 +297,68 @@ class DebraLegalAPITester(unittest.TestCase):
         self.assertIn("message", result)
         print(f"✅ Updated appointment status to confirmed")
 
+    def test_19_get_payment_settings(self):
+        """Test getting payment settings"""
+        print("\n🔍 Testing get payment settings endpoint...")
+        response = requests.get(f"{self.base_url}/api/payments/settings")
+        self.assertEqual(response.status_code, 200)
+        settings = response.json()
+        self.assertIn("min_amount", settings)
+        self.assertIn("max_amount", settings)
+        self.assertIn("currency", settings)
+        self.assertEqual(settings["currency"], "SAR")
+        self.assertGreaterEqual(settings["min_amount"], 50)
+        self.assertLessEqual(settings["max_amount"], 50000)
+        print(f"✅ Got payment settings: min={settings['min_amount']}, max={settings['max_amount']}")
+        return settings
+
+    def test_20_create_payment(self):
+        """Test creating a payment session"""
+        if not self.appointment_id:
+            self.test_06_create_appointment()
+        
+        print(f"\n🔍 Testing create payment endpoint for appointment ID: {self.appointment_id}...")
+        payment_data = {
+            "appointment_id": self.appointment_id,
+            "amount": 300,
+            "customer_name": "عميل اختبار",
+            "customer_email": "test@example.com",
+            "customer_mobile": "512345678",
+            "consultation_type": "video",
+            "lawyer_name": "محامي اختبار"
+        }
+        
+        response = requests.post(
+            f"{self.base_url}/api/payments/create",
+            json=payment_data
+        )
+        self.assertEqual(response.status_code, 200)
+        payment_result = response.json()
+        self.assertIn("success", payment_result)
+        
+        if payment_result["success"]:
+            self.assertIn("payment_url", payment_result)
+            self.assertIn("invoice_id", payment_result)
+            print(f"✅ Created payment session with invoice ID: {payment_result['invoice_id']}")
+        else:
+            print(f"⚠️ Payment creation returned error: {payment_result.get('error', 'Unknown error')}")
+        
+        return payment_result
+
+    def test_21_get_payment_history(self):
+        """Test getting payment history for an appointment"""
+        if not self.appointment_id:
+            self.test_06_create_appointment()
+        
+        print(f"\n🔍 Testing get payment history endpoint for appointment ID: {self.appointment_id}...")
+        response = requests.get(f"{self.base_url}/api/payments/history/{self.appointment_id}")
+        self.assertEqual(response.status_code, 200)
+        history = response.json()
+        self.assertIn("appointment_id", history)
+        self.assertIn("payments", history)
+        self.assertIn("count", history)
+        print(f"✅ Got payment history with {history['count']} payments")
+
 def run_tests():
     # Create a test suite
     suite = unittest.TestSuite()
@@ -320,7 +382,10 @@ def run_tests():
         'test_15_get_lawyer_consultations',
         'test_16_get_lawyer_stats',
         'test_17_update_lawyer_profile',
-        'test_18_update_appointment_status'
+        'test_18_update_appointment_status',
+        'test_19_get_payment_settings',
+        'test_20_create_payment',
+        'test_21_get_payment_history'
     ]
     
     for test_case in test_cases:
