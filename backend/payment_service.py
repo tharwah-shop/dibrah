@@ -59,6 +59,18 @@ class MyFatoorahService:
             if not self.validate_amount(amount):
                 raise ValueError(f"المبلغ يجب أن يكون بين {self.min_amount} و {self.max_amount} ريال")
             
+            # في وضع الاختبار، نعيد استجابة وهمية
+            if self.api_key == "test_api_key":
+                logger.info(f"Test mode: Creating payment session for appointment {appointment_id}")
+                return {
+                    "success": True,
+                    "payment_url": f"{self.success_url}?appointment_id={appointment_id}",
+                    "invoice_id": f"test_invoice_{uuid.uuid4()}",
+                    "appointment_id": appointment_id,
+                    "amount": amount,
+                    "currency": "SAR"
+                }
+            
             # إعداد بيانات الدفع
             payment_data = {
                 "CustomerName": customer_name,
