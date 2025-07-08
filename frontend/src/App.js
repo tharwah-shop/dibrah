@@ -140,11 +140,59 @@ const App = () => {
   // نظام الإشعارات
   const [notification, setNotification] = useState(null);
 
-  const showNotification = (message, type = 'info') => {
-    setNotification({ message, type, id: Date.now() });
-    setTimeout(() => {
-      setNotification(null);
-    }, 3000);
+  // إنشاء جلسة دفع
+  const createPaymentSession = async (appointmentId, paymentData) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payments/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointment_id: appointmentId,
+          amount: paymentData.amount,
+          customer_name: paymentData.customer_name,
+          customer_email: paymentData.customer_email,
+          customer_mobile: paymentData.customer_mobile,
+          consultation_type: paymentData.consultation_type,
+          lawyer_name: paymentData.lawyer_name
+        })
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // إعادة توجيه المستخدم لصفحة الدفع
+        window.location.href = result.payment_url;
+        return true;
+      } else {
+        showNotification(result.error || 'حدث خطأ في إنشاء جلسة الدفع', 'error');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error creating payment session:', error);
+      showNotification('حدث خطأ في الاتصال بنظام الدفع', 'error');
+      return false;
+    }
+  };
+
+  // التحقق من حالة الدفع
+  const verifyPayment = async (paymentId) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/payments/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ payment_id: paymentId })
+      });
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error verifying payment:', error);
+      return { success: false, error: 'خطأ في التحقق من الدفع' };
+    }
   };
 
   // تحديث ملف المحامي
