@@ -155,6 +155,163 @@ const App = () => {
     }, 3000);
   };
 
+  // التحقق من المصادقة عند بدء التطبيق
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    const userData = localStorage.getItem('userData');
+    
+    if (token && userData) {
+      try {
+        setAuthToken(token);
+        setUser(JSON.parse(userData));
+        setIsAuthenticated(true);
+        
+        // توجيه المستخدم لصفحته المناسبة
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser.role === 'admin') {
+          setCurrentPage('adminDashboard');
+        } else if (parsedUser.role === 'lawyer') {
+          setCurrentPage('lawyerDashboard');
+        } else if (parsedUser.role === 'client') {
+          setCurrentPage('clientDashboard');
+        }
+      } catch (error) {
+        console.error('Error parsing stored user data:', error);
+        logout();
+      }
+    }
+    
+    fetchLawyers();
+    fetchPaymentSettings();
+  }, []);
+
+  // دوال المصادقة
+  const login = async (email, password) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setAuthToken(data.access_token);
+        setUser(data.user);
+        setIsAuthenticated(true);
+        
+        // حفظ في localStorage
+        localStorage.setItem('authToken', data.access_token);
+        localStorage.setItem('userData', JSON.stringify(data.user));
+        
+        showNotification('تم تسجيل الدخول بنجاح', 'success');
+        
+        // توجيه حسب نوع المستخدم
+        if (data.user.role === 'admin') {
+          setCurrentPage('adminDashboard');
+        } else if (data.user.role === 'lawyer') {
+          setCurrentPage('lawyerDashboard');
+        } else if (data.user.role === 'client') {
+          setCurrentPage('clientDashboard');
+        }
+        
+        return true;
+      } else {
+        showNotification(data.detail || 'خطأ في تسجيل الدخول', 'error');
+        return false;
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      showNotification('خطأ في الاتصال', 'error');
+      return false;
+    }
+  };
+
+  const register = async (userData) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setAuthToken(data.access_token);
+        setUser(data.user);
+        setIsAuthenticated(true);
+        
+        localStorage.setItem('authToken', data.access_token);
+        localStorage.setItem('userData', JSON.stringify(data.user));
+        
+        showNotification('تم التسجيل بنجاح', 'success');
+        
+        // توجيه حسب نوع المستخدم
+        if (data.user.role === 'lawyer') {
+          showNotification('سيتم مراجعة طلبك وتفعيل الحساب خلال 24 ساعة', 'info');
+          setCurrentPage('home');
+        } else {
+          setCurrentPage('clientDashboard');
+        }
+        
+        return true;
+      } else {
+        showNotification(data.detail || 'خطأ في التسجيل', 'error');
+        return false;
+      }
+    } catch (error) {
+      console.error('Register error:', error);
+      showNotification('خطأ في الاتصال', 'error');
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      if (authToken) {
+        await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setAuthToken(null);
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+      setCurrentPage('home');
+      showNotification('تم تسجيل الخروج بنجاح', 'success');
+    }
+  };
+
+  // دوال مساعدة للـ API مع المصادقة
+  const apiCall = async (url, options = {}) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    
+    return fetch(`${process.env.REACT_APP_BACKEND_URL}${url}`, {
+      ...options,
+      headers
+    });
+  };
+
   // إنشاء جلسة دفع
   const createPaymentSession = async (appointmentId, paymentData) => {
     try {
