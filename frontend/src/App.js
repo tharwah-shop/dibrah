@@ -145,10 +145,13 @@ const App = () => {
       if (response.ok) {
         const updatedLawyer = await response.json();
         setUser(updatedLawyer);
-        alert('تم تحديث الملف الشخصي بنجاح');
+        showNotification('تم تحديث الملف الشخصي بنجاح', 'success');
+      } else {
+        showNotification('حدث خطأ في تحديث الملف الشخصي', 'error');
       }
     } catch (error) {
       console.error('Error updating profile:', error);
+      showNotification('حدث خطأ في تحديث الملف الشخصي', 'error');
     }
   };
 
