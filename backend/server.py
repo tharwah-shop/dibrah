@@ -204,6 +204,139 @@ async def get_lawyer(lawyer_id: str):
         logger.error(f"خطأ في جلب المحامي: {e}")
         raise HTTPException(status_code=500, detail="خطأ في جلب المحامي")
 
+# نقاط النهاية الجديدة للمحامين
+@app.post("/api/lawyers/{lawyer_id}/login")
+async def lawyer_login(lawyer_id: str):
+    """تسجيل دخول المحامي"""
+    try:
+        lawyer = lawyers_collection.find_one({"id": lawyer_id}, {"_id": 0})
+        if not lawyer:
+            raise HTTPException(status_code=404, detail="المحامي غير موجود")
+        
+        # محاكاة تسجيل الدخول
+        return {
+            "message": "تم تسجيل الدخول بنجاح",
+            "lawyer": lawyer,
+            "token": f"lawyer_token_{lawyer_id}"
+        }
+    except Exception as e:
+        logger.error(f"خطأ في تسجيل دخول المحامي: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في تسجيل دخول المحامي")
+
+@app.get("/api/lawyers/{lawyer_id}/appointments")
+async def get_lawyer_appointments(lawyer_id: str):
+    """جلب مواعيد المحامي"""
+    try:
+        appointments = list(appointments_collection.find(
+            {"lawyer_id": lawyer_id}, 
+            {"_id": 0}
+        ).sort("created_at", -1))
+        return appointments
+    except Exception as e:
+        logger.error(f"خطأ في جلب مواعيد المحامي: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في جلب مواعيد المحامي")
+
+@app.get("/api/lawyers/{lawyer_id}/consultations")
+async def get_lawyer_consultations(lawyer_id: str):
+    """جلب استشارات المحامي"""
+    try:
+        consultations = list(consultations_collection.find(
+            {"lawyer_id": lawyer_id}, 
+            {"_id": 0}
+        ).sort("started_at", -1))
+        return consultations
+    except Exception as e:
+        logger.error(f"خطأ في جلب استشارات المحامي: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في جلب استشارات المحامي")
+
+@app.get("/api/lawyers/{lawyer_id}/stats")
+async def get_lawyer_stats(lawyer_id: str):
+    """جلب إحصائيات المحامي"""
+    try:
+        # حساب الإحصائيات
+        total_appointments = appointments_collection.count_documents({"lawyer_id": lawyer_id})
+        active_consultations = consultations_collection.count_documents({
+            "lawyer_id": lawyer_id, 
+            "status": "active"
+        })
+        completed_consultations = consultations_collection.count_documents({
+            "lawyer_id": lawyer_id, 
+            "status": "completed"
+        })
+        
+        # حساب الأرباح (تقديري)
+        lawyer = lawyers_collection.find_one({"id": lawyer_id}, {"_id": 0})
+        estimated_earnings = completed_consultations * (lawyer.get("price", 0) if lawyer else 0)
+        
+        return {
+            "totalAppointments": total_appointments,
+            "activeConsultations": active_consultations,
+            "completedConsultations": completed_consultations,
+            "totalEarnings": estimated_earnings
+        }
+    except Exception as e:
+        logger.error(f"خطأ في جلب إحصائيات المحامي: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في جلب إحصائيات المحامي")
+
+@app.put("/api/lawyers/{lawyer_id}")
+async def update_lawyer_profile(lawyer_id: str, profile_data: dict):
+    """تحديث ملف المحامي"""
+    try:
+        # التحقق من وجود المحامي
+        lawyer = lawyers_collection.find_one({"id": lawyer_id})
+        if not lawyer:
+            raise HTTPException(status_code=404, detail="المحامي غير موجود")
+        
+        # تحديث البيانات
+        update_data = {
+            "name": profile_data.get("name"),
+            "specialization": profile_data.get("specialization"),
+            "description": profile_data.get("description"),
+            "price": profile_data.get("price"),
+            "experience_years": profile_data.get("experience_years"),
+            "languages": profile_data.get("languages", []),
+            "certificates": profile_data.get("certificates", [])
+        }
+        
+        # إزالة القيم الفارغة
+        update_data = {k: v for k, v in update_data.items() if v is not None}
+        
+        # تحديث في قاعدة البيانات
+        lawyers_collection.update_one(
+            {"id": lawyer_id},
+            {"$set": update_data}
+        )
+        
+        # إرجاع البيانات المحدثة
+        updated_lawyer = lawyers_collection.find_one({"id": lawyer_id}, {"_id": 0})
+        return updated_lawyer
+        
+    except Exception as e:
+        logger.error(f"خطأ في تحديث ملف المحامي: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في تحديث ملف المحامي")
+
+@app.put("/api/appointments/{appointment_id}/status")
+async def update_appointment_status(appointment_id: str, status_data: dict):
+    """تحديث حالة الموعد"""
+    try:
+        # التحقق من وجود الموعد
+        appointment = appointments_collection.find_one({"id": appointment_id})
+        if not appointment:
+            raise HTTPException(status_code=404, detail="الموعد غير موجود")
+        
+        # تحديث الحالة
+        new_status = status_data.get("status")
+        appointments_collection.update_one(
+            {"id": appointment_id},
+            {"$set": {"status": new_status}}
+        )
+        
+        return {"message": "تم تحديث حالة الموعد بنجاح"}
+        
+    except Exception as e:
+        logger.error(f"خطأ في تحديث حالة الموعد: {e}")
+        raise HTTPException(status_code=500, detail="خطأ في تحديث حالة الموعد")
+
 @app.post("/api/appointments")
 async def create_appointment(appointment_data: dict):
     """إنشاء موعد جديد"""

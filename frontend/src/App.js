@@ -7,6 +7,14 @@ const App = () => {
   const [lawyers, setLawyers] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [currentConsultation, setCurrentConsultation] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isLawyerMode, setIsLawyerMode] = useState(false);
+  const [lawyerDashboardData, setLawyerDashboardData] = useState({
+    appointments: [],
+    consultations: [],
+    stats: {},
+    profile: {}
+  });
 
   // جلب بيانات المحامين
   useEffect(() => {
@@ -20,6 +28,90 @@ const App = () => {
       setLawyers(data);
     } catch (error) {
       console.error('Error fetching lawyers:', error);
+    }
+  };
+
+  // تسجيل دخول المحامي
+  const lawyerLogin = async (lawyerId) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/lawyers/${lawyerId}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      setUser(data.lawyer);
+      setIsLawyerMode(true);
+      setCurrentPage('lawyerDashboard');
+      await fetchLawyerDashboardData(lawyerId);
+    } catch (error) {
+      console.error('Error logging in lawyer:', error);
+    }
+  };
+
+  // جلب بيانات لوحة التحكم
+  const fetchLawyerDashboardData = async (lawyerId) => {
+    try {
+      const [appointmentsRes, consultationsRes, statsRes] = await Promise.all([
+        fetch(`${process.env.REACT_APP_BACKEND_URL}/api/lawyers/${lawyerId}/appointments`),
+        fetch(`${process.env.REACT_APP_BACKEND_URL}/api/lawyers/${lawyerId}/consultations`),
+        fetch(`${process.env.REACT_APP_BACKEND_URL}/api/lawyers/${lawyerId}/stats`)
+      ]);
+
+      const appointments = await appointmentsRes.json();
+      const consultations = await consultationsRes.json();
+      const stats = await statsRes.json();
+
+      setLawyerDashboardData({
+        appointments: appointments || [],
+        consultations: consultations || [],
+        stats: stats || {},
+        profile: user || {}
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    }
+  };
+
+  // تحديث حالة الموعد
+  const updateAppointmentStatus = async (appointmentId, status) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/appointments/${appointmentId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status })
+      });
+      
+      if (response.ok) {
+        await fetchLawyerDashboardData(user.id);
+        alert('تم تحديث حالة الموعد بنجاح');
+      }
+    } catch (error) {
+      console.error('Error updating appointment status:', error);
+    }
+  };
+
+  // تحديث ملف المحامي
+  const updateLawyerProfile = async (profileData) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/lawyers/${user.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileData)
+      });
+      
+      if (response.ok) {
+        const updatedLawyer = await response.json();
+        setUser(updatedLawyer);
+        alert('تم تحديث الملف الشخصي بنجاح');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
     }
   };
 
@@ -65,6 +157,13 @@ const App = () => {
     }
   };
 
+  // تسجيل الخروج
+  const logout = () => {
+    setUser(null);
+    setIsLawyerMode(false);
+    setCurrentPage('home');
+  };
+
   // الصفحة الرئيسية
   const HomePage = () => (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -94,6 +193,12 @@ const App = () => {
                 className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
               >
                 مواعيدي
+              </button>
+              <button 
+                onClick={() => setCurrentPage('lawyerLogin')}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                دخول المحامين
               </button>
             </nav>
           </div>
@@ -184,6 +289,496 @@ const App = () => {
           </button>
         </div>
       </section>
+    </div>
+  );
+
+  // صفحة تسجيل دخول المحامين
+  const LawyerLoginPage = () => (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">دخول المحامين</h2>
+          <p className="text-gray-600">اختر حسابك للدخول إلى لوحة التحكم</p>
+        </div>
+        
+        <div className="bg-white shadow-lg rounded-lg p-8">
+          <div className="space-y-4">
+            {lawyers.map(lawyer => (
+              <div key={lawyer.id} className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <img 
+                      src={lawyer.image || "https://images.pexels.com/photos/32892535/pexels-photo-32892535.jpeg"} 
+                      alt={lawyer.name}
+                      className="w-12 h-12 rounded-full ml-3 object-cover"
+                    />
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{lawyer.name}</h3>
+                      <p className="text-sm text-blue-600">{lawyer.specialization}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => lawyerLogin(lawyer.id)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                  >
+                    دخول
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-6 text-center">
+            <button 
+              onClick={() => setCurrentPage('home')}
+              className="text-gray-600 hover:text-gray-800 font-medium"
+            >
+              العودة للرئيسية
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // لوحة تحكم المحامين
+  const LawyerDashboard = () => {
+    const [activeTab, setActiveTab] = useState('overview');
+    
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-6">
+              <div className="flex items-center">
+                <img 
+                  src={user?.image || "https://images.pexels.com/photos/32892535/pexels-photo-32892535.jpeg"} 
+                  alt={user?.name}
+                  className="w-12 h-12 rounded-full ml-3 object-cover"
+                />
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">مرحباً {user?.name}</h1>
+                  <p className="text-sm text-gray-600">{user?.specialization}</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4 space-x-reverse">
+                <button 
+                  onClick={() => setCurrentPage('home')}
+                  className="text-gray-600 hover:text-gray-800 font-medium"
+                >
+                  الموقع الرئيسي
+                </button>
+                <button 
+                  onClick={logout}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  تسجيل الخروج
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Navigation Tabs */}
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <nav className="flex space-x-8 space-x-reverse">
+              {[
+                { id: 'overview', label: 'نظرة عامة', icon: '📊' },
+                { id: 'appointments', label: 'المواعيد', icon: '📅' },
+                { id: 'consultations', label: 'الاستشارات', icon: '💬' },
+                { id: 'profile', label: 'الملف الشخصي', icon: '👤' },
+                { id: 'settings', label: 'الإعدادات', icon: '⚙️' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {activeTab === 'overview' && <DashboardOverview />}
+          {activeTab === 'appointments' && <AppointmentsManagement />}
+          {activeTab === 'consultations' && <ConsultationsManagement />}
+          {activeTab === 'profile' && <ProfileManagement />}
+          {activeTab === 'settings' && <SettingsManagement />}
+        </div>
+      </div>
+    );
+  };
+
+  // نظرة عامة على لوحة التحكم
+  const DashboardOverview = () => (
+    <div className="space-y-6">
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 bg-blue-100 rounded-full">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 9l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 13a9 9 0 1018 0 9 9 0 00-18 0z" />
+              </svg>
+            </div>
+            <div className="mr-4">
+              <p className="text-2xl font-bold text-gray-900">{lawyerDashboardData.stats.totalAppointments || 0}</p>
+              <p className="text-gray-600">إجمالي المواعيد</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 bg-green-100 rounded-full">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <div className="mr-4">
+              <p className="text-2xl font-bold text-gray-900">{lawyerDashboardData.stats.activeConsultations || 0}</p>
+              <p className="text-gray-600">الاستشارات النشطة</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 bg-yellow-100 rounded-full">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+              </svg>
+            </div>
+            <div className="mr-4">
+              <p className="text-2xl font-bold text-gray-900">{lawyerDashboardData.stats.totalEarnings || 0} ريال</p>
+              <p className="text-gray-600">إجمالي الأرباح</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 bg-purple-100 rounded-full">
+              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+            </div>
+            <div className="mr-4">
+              <p className="text-2xl font-bold text-gray-900">{user?.rating || 0}</p>
+              <p className="text-gray-600">التقييم</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Appointments */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">المواعيد الأخيرة</h3>
+        <div className="space-y-4">
+          {lawyerDashboardData.appointments.slice(0, 3).map(appointment => (
+            <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div>
+                <p className="font-medium text-gray-900">موعد - {appointment.date}</p>
+                <p className="text-sm text-gray-600">{appointment.time} - {appointment.consultation_type}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {appointment.status === 'pending' ? 'في الانتظار' : 
+                 appointment.status === 'confirmed' ? 'مؤكد' : 'ملغى'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // إدارة المواعيد
+  const AppointmentsManagement = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">جميع المواعيد</h3>
+        <div className="space-y-4">
+          {lawyerDashboardData.appointments.map(appointment => (
+            <div key={appointment.id} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-gray-900">موعد - {appointment.date}</h4>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {appointment.status === 'pending' ? 'في الانتظار' : 
+                       appointment.status === 'confirmed' ? 'مؤكد' : 'ملغى'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">الوقت: {appointment.time}</p>
+                  <p className="text-sm text-gray-600">نوع الاستشارة: {appointment.consultation_type}</p>
+                  {appointment.notes && (
+                    <p className="text-sm text-gray-600 mt-2">ملاحظات: {appointment.notes}</p>
+                  )}
+                </div>
+                <div className="flex space-x-2 space-x-reverse">
+                  {appointment.status === 'pending' && (
+                    <>
+                      <button 
+                        onClick={() => updateAppointmentStatus(appointment.id, 'confirmed')}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                      >
+                        تأكيد
+                      </button>
+                      <button 
+                        onClick={() => updateAppointmentStatus(appointment.id, 'cancelled')}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                      >
+                        إلغاء
+                      </button>
+                    </>
+                  )}
+                  {appointment.status === 'confirmed' && (
+                    <button 
+                      onClick={() => startConsultation(user.id)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                    >
+                      بدء الاستشارة
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // إدارة الاستشارات
+  const ConsultationsManagement = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">الاستشارات النشطة</h3>
+        <div className="space-y-4">
+          {lawyerDashboardData.consultations.map(consultation => (
+            <div key={consultation.id} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h4 className="font-medium text-gray-900">استشارة - {consultation.consultation_type}</h4>
+                  <p className="text-sm text-gray-600">بدأت في: {new Date(consultation.started_at).toLocaleString('ar-SA')}</p>
+                  <p className="text-sm text-gray-600">الحالة: {consultation.status === 'active' ? 'نشطة' : 'مكتملة'}</p>
+                </div>
+                <div className="flex space-x-2 space-x-reverse">
+                  {consultation.status === 'active' && (
+                    <>
+                      <button 
+                        onClick={() => {
+                          setCurrentConsultation(consultation);
+                          setCurrentPage('consultation');
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                      >
+                        الانضمام
+                      </button>
+                      <button 
+                        onClick={() => updateConsultationStatus(consultation.id, 'completed')}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                      >
+                        إنهاء
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // إدارة الملف الشخصي
+  const ProfileManagement = () => {
+    const [profileData, setProfileData] = useState({
+      name: user?.name || '',
+      specialization: user?.specialization || '',
+      description: user?.description || '',
+      price: user?.price || 0,
+      experience_years: user?.experience_years || 0,
+      languages: user?.languages?.join(', ') || '',
+      certificates: user?.certificates?.join(', ') || ''
+    });
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      const updatedData = {
+        ...profileData,
+        languages: profileData.languages.split(',').map(lang => lang.trim()),
+        certificates: profileData.certificates.split(',').map(cert => cert.trim())
+      };
+      updateLawyerProfile(updatedData);
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">تعديل الملف الشخصي</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">الاسم</label>
+              <input 
+                type="text" 
+                value={profileData.name}
+                onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">التخصص</label>
+              <input 
+                type="text" 
+                value={profileData.specialization}
+                onChange={(e) => setProfileData({...profileData, specialization: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">الوصف</label>
+              <textarea 
+                value={profileData.description}
+                onChange={(e) => setProfileData({...profileData, description: e.target.value})}
+                rows="4"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">سعر الساعة (ريال)</label>
+                <input 
+                  type="number" 
+                  value={profileData.price}
+                  onChange={(e) => setProfileData({...profileData, price: parseInt(e.target.value)})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">سنوات الخبرة</label>
+                <input 
+                  type="number" 
+                  value={profileData.experience_years}
+                  onChange={(e) => setProfileData({...profileData, experience_years: parseInt(e.target.value)})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">اللغات (مفصولة بفواصل)</label>
+              <input 
+                type="text" 
+                value={profileData.languages}
+                onChange={(e) => setProfileData({...profileData, languages: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="العربية, الإنجليزية, الفرنسية"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">الشهادات (مفصولة بفواصل)</label>
+              <input 
+                type="text" 
+                value={profileData.certificates}
+                onChange={(e) => setProfileData({...profileData, certificates: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="بكالوريوس الحقوق, ماجستير القانون"
+              />
+            </div>
+            
+            <button 
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+            >
+              حفظ التغييرات
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  // إدارة الإعدادات
+  const SettingsManagement = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">إعدادات الحساب</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h4 className="font-medium text-gray-900">الحالة النشطة</h4>
+              <p className="text-sm text-gray-600">تحديد ما إذا كنت متاحاً لتلقي مواعيد جديدة</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" defaultChecked className="sr-only peer" />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+          
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h4 className="font-medium text-gray-900">الإشعارات</h4>
+              <p className="text-sm text-gray-600">تلقي إشعارات عند حجز مواعيد جديدة</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" defaultChecked className="sr-only peer" />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+          
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h4 className="font-medium text-gray-900 mb-2">ساعات العمل</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">من</label>
+                <input 
+                  type="time" 
+                  defaultValue="09:00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">إلى</label>
+                <input 
+                  type="time" 
+                  defaultValue="17:00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -382,17 +977,17 @@ const App = () => {
         setMessages([...messages, {
           id: Date.now(),
           text: newMessage,
-          sender: 'client',
+          sender: isLawyerMode ? 'lawyer' : 'client',
           timestamp: new Date()
         }]);
         setNewMessage('');
         
-        // محاكاة رد المحامي
+        // محاكاة رد الطرف الآخر
         setTimeout(() => {
           setMessages(prev => [...prev, {
             id: Date.now(),
-            text: 'شكراً لك على رسالتك، سأراجع الأمر وأعود إليك بالرد المناسب',
-            sender: 'lawyer',
+            text: isLawyerMode ? 'شكراً لك على رسالتك، سأراجع الأمر وأعود إليك بالرد المناسب' : 'تلقيت رسالتك، كيف يمكنني مساعدتك؟',
+            sender: isLawyerMode ? 'client' : 'lawyer',
             timestamp: new Date()
           }]);
         }, 2000);
@@ -417,7 +1012,7 @@ const App = () => {
                   {isVideoCall ? 'إيقاف الفيديو' : 'تشغيل الفيديو'}
                 </button>
                 <button 
-                  onClick={() => setCurrentPage('lawyers')}
+                  onClick={() => setCurrentPage(isLawyerMode ? 'lawyerDashboard' : 'lawyers')}
                   className="text-red-600 hover:text-red-800 font-medium"
                 >
                   إنهاء الجلسة
@@ -447,10 +1042,10 @@ const App = () => {
                 {messages.map(message => (
                   <div 
                     key={message.id}
-                    className={`flex ${message.sender === 'client' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${message.sender === (isLawyerMode ? 'lawyer' : 'client') ? 'justify-end' : 'justify-start'}`}
                   >
                     <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      message.sender === 'client' 
+                      message.sender === (isLawyerMode ? 'lawyer' : 'client')
                         ? 'bg-blue-600 text-white' 
                         : 'bg-gray-200 text-gray-800'
                     }`}>
@@ -554,19 +1149,32 @@ const App = () => {
 
   // عرض الصفحة المحددة
   const renderPage = () => {
-    switch (currentPage) {
-      case 'home':
-        return <HomePage />;
-      case 'lawyers':
-        return <LawyersPage />;
-      case 'booking':
-        return <BookingPage />;
-      case 'consultation':
-        return <ConsultationPage />;
-      case 'appointments':
-        return <AppointmentsPage />;
-      default:
-        return <HomePage />;
+    if (isLawyerMode) {
+      switch (currentPage) {
+        case 'lawyerDashboard':
+          return <LawyerDashboard />;
+        case 'consultation':
+          return <ConsultationPage />;
+        default:
+          return <LawyerDashboard />;
+      }
+    } else {
+      switch (currentPage) {
+        case 'home':
+          return <HomePage />;
+        case 'lawyers':
+          return <LawyersPage />;
+        case 'booking':
+          return <BookingPage />;
+        case 'consultation':
+          return <ConsultationPage />;
+        case 'appointments':
+          return <AppointmentsPage />;
+        case 'lawyerLogin':
+          return <LawyerLoginPage />;
+        default:
+          return <HomePage />;
+      }
     }
   };
 
