@@ -1578,7 +1578,157 @@ const App = () => {
     </div>
   );
 
-  // عرض الصفحة المحددة
+  // صفحة نجاح الدفع
+  const PaymentSuccessPage = () => {
+    const [verificationStatus, setVerificationStatus] = useState('loading');
+    const [appointmentDetails, setAppointmentDetails] = useState(null);
+
+    useEffect(() => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const appointmentId = urlParams.get('appointment_id');
+      const paymentId = urlParams.get('paymentId');
+
+      if (paymentId) {
+        verifyPaymentAndUpdateStatus(paymentId, appointmentId);
+      }
+    }, []);
+
+    const verifyPaymentAndUpdateStatus = async (paymentId, appointmentId) => {
+      try {
+        const result = await verifyPayment(paymentId);
+        
+        if (result.success && result.is_paid) {
+          setVerificationStatus('success');
+          // جلب تفاصيل الموعد
+          const appointmentResponse = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/appointments`);
+          const appointments = await appointmentResponse.json();
+          const appointment = appointments.find(a => a.id === appointmentId);
+          setAppointmentDetails(appointment);
+        } else {
+          setVerificationStatus('failed');
+        }
+      } catch (error) {
+        console.error('Error verifying payment:', error);
+        setVerificationStatus('error');
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            {verificationStatus === 'loading' && (
+              <div className="bg-white p-8 rounded-lg shadow-md">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">جاري التحقق من الدفع...</h2>
+                <p className="text-gray-600">يرجى الانتظار بينما نتحقق من حالة دفعتك</p>
+              </div>
+            )}
+
+            {verificationStatus === 'success' && (
+              <div className="bg-white p-8 rounded-lg shadow-md">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-green-600 mb-2">تم الدفع بنجاح!</h2>
+                <p className="text-gray-600 mb-6">تم تأكيد حجز موعدك وسيتم التواصل معك قريباً</p>
+                
+                {appointmentDetails && (
+                  <div className="bg-green-50 p-4 rounded-lg mb-6 text-right">
+                    <h3 className="font-semibold text-green-800 mb-2">تفاصيل الموعد</h3>
+                    <div className="text-sm text-green-700">
+                      <p><strong>المحامي:</strong> {appointmentDetails.lawyer_name}</p>
+                      <p><strong>التاريخ:</strong> {appointmentDetails.date}</p>
+                      <p><strong>الوقت:</strong> {appointmentDetails.time}</p>
+                      <p><strong>نوع الاستشارة:</strong> {appointmentDetails.consultation_type}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <button 
+                    onClick={() => setCurrentPage('appointments')}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    عرض مواعيدي
+                  </button>
+                  <button 
+                    onClick={() => setCurrentPage('home')}
+                    className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    العودة للرئيسية
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(verificationStatus === 'failed' || verificationStatus === 'error') && (
+              <div className="bg-white p-8 rounded-lg shadow-md">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-red-600 mb-2">فشل في الدفع</h2>
+                <p className="text-gray-600 mb-6">عذراً، لم تتم عملية الدفع بنجاح. يرجى المحاولة مرة أخرى.</p>
+                
+                <div className="space-y-3">
+                  <button 
+                    onClick={() => setCurrentPage('lawyers')}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    المحاولة مرة أخرى
+                  </button>
+                  <button 
+                    onClick={() => setCurrentPage('home')}
+                    className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    العودة للرئيسية
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // صفحة خطأ الدفع
+  const PaymentErrorPage = () => (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <div className="bg-white p-8 rounded-lg shadow-md">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-red-600 mb-2">حدث خطأ في الدفع</h2>
+            <p className="text-gray-600 mb-6">عذراً، حدث خطأ أثناء عملية الدفع. لم يتم خصم أي مبلغ من حسابك.</p>
+            
+            <div className="space-y-3">
+              <button 
+                onClick={() => setCurrentPage('lawyers')}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+              >
+                المحاولة مرة أخرى
+              </button>
+              <button 
+                onClick={() => setCurrentPage('home')}
+                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition-colors"
+              >
+                العودة للرئيسية
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
   const renderPage = () => {
     if (isLawyerMode) {
       switch (currentPage) {
