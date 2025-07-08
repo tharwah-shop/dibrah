@@ -87,11 +87,48 @@ const App = () => {
       
       if (response.ok) {
         await fetchLawyerDashboardData(user.id);
-        alert('تم تحديث حالة الموعد بنجاح');
+        // عرض إشعار نجاح
+        showNotification('تم تحديث حالة الموعد بنجاح', 'success');
+      } else {
+        showNotification('حدث خطأ في تحديث حالة الموعد', 'error');
       }
     } catch (error) {
       console.error('Error updating appointment status:', error);
+      showNotification('حدث خطأ في تحديث حالة الموعد', 'error');
     }
+  };
+
+  // تحديث حالة الاستشارة
+  const updateConsultationStatus = async (consultationId, status) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/consultations/${consultationId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status })
+      });
+      
+      if (response.ok) {
+        await fetchLawyerDashboardData(user.id);
+        showNotification('تم تحديث حالة الاستشارة بنجاح', 'success');
+      } else {
+        showNotification('حدث خطأ في تحديث حالة الاستشارة', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating consultation status:', error);
+      showNotification('حدث خطأ في تحديث حالة الاستشارة', 'error');
+    }
+  };
+
+  // نظام الإشعارات
+  const [notification, setNotification] = useState(null);
+
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type, id: Date.now() });
+    setTimeout(() => {
+      setNotification(null);
+    }, 3000);
   };
 
   // تحديث ملف المحامي
