@@ -43,6 +43,7 @@ try:
     appointments_collection = db['appointments']
     consultations_collection = db['consultations']
     users_collection = db['users']
+    payments_collection = db['payments']  # مجموعة جديدة للدفعات
     
     logger.info("تم الاتصال بقاعدة البيانات بنجاح")
 except Exception as e:
